@@ -4,33 +4,32 @@ import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 
 const LOCATION_TASK_NAME = 'background-location-task';
-const GEO_LOCATION_KEY = 'GEO_LOCATIONS';
+const GEO_LOCATION_KEY = 'GEO_LOCATION_3';
 
 const delay = 5000;
 
+
+
 export const useGeolocation = () => {
-    const [location, setLocation] = useState([]);
 
+    const [geolocations, setGeolocation] = useState([]);
+
+    // set first initial cached locations
     useEffect(() => {
+        const setup = async () => {
+            const initial_cached_locations = await AsyncStorage.getItem(GEO_LOCATION_KEY);
+            if (initial_cached_locations) {
+                setGeolocation(JSON.parse(initial_cached_locations));
+            } else {
+                await AsyncStorage.setItem(GEO_LOCATION_KEY, JSON.stringify([]));
+            }
+        }
+        setup();
         backgroundLocation();
-        initStorageLocation();
-
-        setTimerForGeolocationUpdate();
-
-        // let timer = setTimeout(async function updateLocations() {
-        //     // const locations = await AsyncStorage.getItem(GEO_LOCATION_KEY);
-        //     // const arr_locations = JSON.parse(locations);
-        //     // setLocation(arr_locations);
-        //     // const t = timer+1;
-        //     // setTimer(t);
-        //     backgroundLocation()
-        //     timer = setTimeout(updateLocations, delay)
-        // }, delay)
     }, [])
 
     useEffect(() => {
-
-        TaskManager.defineTask(LOCATION_TASK_NAME, ({ data, error }) => {
+        TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
             if (error) {
                 // Error occurred - check `error.message` for more details.
                 Alert.alert(error.message);
@@ -39,54 +38,23 @@ export const useGeolocation = () => {
             if (data) {
                 const { locations } = data;
 
-                const arr = [...locations, ...location];
-                // Alert.alert(arr.length.toString() + "  " + location.length.toString() + "  " + locations.length.toString() + " " + setLocation.toString())
+                const cached_locations = JSON.parse(await AsyncStorage.getItem(GEO_LOCATION_KEY));
 
-                setLocation([...locations, ...location]);
+                const concated_locations = [...locations, ...cached_locations];
 
-                // setLocation(JSON.stringify(locations))
+                await AsyncStorage.setItem(GEO_LOCATION_KEY, JSON.stringify(concated_locations));
 
-                setTimeout(() => {
-                    backgroundLocation();
-                }, delay)
+                setGeolocation(concated_locations);
+
+                // setTimeout(() => {
+                //     backgroundLocation();
+                // }, delay)
                 // do something with the locations captured in the background
             }
         });
     }, [])
 
-    return [location]
-}
-
-const setTimerForGeolocationUpdate = () => {
-
-    let timerId = setTimeout(async function request() {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async ({ coords: { altitude, longitude, latitude } }) => {
-                const locations = JSON.parse(await AsyncStorage.getItem(GEO_LOCATION_KEY));
-
-                const str = JSON.stringify([{ altitude, longitude, latitude }, ...locations]);
-                await AsyncStorage.setItem(GEO_LOCATION_KEY, str);
-            }, error => {
-                Alert.alert(error.message);
-            });
-        } else {
-            // setLocation(['geolocation not supported!!!']);
-        }
-        timerId = setTimeout(request, delay);
-
-    }, delay);
-}
-
-export const clearCache = async () => {
-    await AsyncStorage.setItem(GEO_LOCATION_KEY, JSON.stringify([]));
-    initStorageLocation();
-}
-
-const initStorageLocation = async () => {
-    const locations = await AsyncStorage.getItem(GEO_LOCATION_KEY);
-    if (!locations) {
-        await AsyncStorage.setItem(GEO_LOCATION_KEY, JSON.stringify([]));
-    }
+    return [geolocations]
 }
 
 const backgroundLocation = async () => {
@@ -94,7 +62,19 @@ const backgroundLocation = async () => {
     if (status === 'granted') {
         await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
             accuracy: Location.Accuracy.Balanced,
+            timeInterval: delay,
+            foregroundService: {
+                notificationTitle: 'Covid19',
+                notificationBody: 'Running!!'
+            },
+            pausesUpdatesAutomatically: false
         });
     }
 };
+
+
+export const clearCache = async () => {
+    await AsyncStorage.setItem(GEO_LOCATION_KEY, JSON.stringify([]));
+}
+
 
